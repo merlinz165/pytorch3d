@@ -573,3 +573,64 @@ def _save(f, verts, faces, decimal_places: Optional[int] = None) -> None:
                 lines += "f %s" % " ".join(face)
 
     f.write(lines)
+
+
+# Customize
+def generate_obj(verts, faces, decimal_places: Optional[int] = None):
+    """
+    Save a mesh to an .obj file.
+
+    Args:
+        verts: FloatTensor of shape (V, 3) giving vertex coordinates.
+        faces: LongTensor of shape (F, 3) giving faces.
+        decimal_places: Number of decimal places for saving.
+    """
+    if len(verts) and not (verts.dim() == 2 and verts.size(1) == 3):
+        message = "Argument 'verts' should either be empty or of shape (num_verts, 3)."
+        raise ValueError(message)
+
+    if len(faces) and not (faces.dim() == 2 and faces.size(1) == 3):
+        message = "Argument 'faces' should either be empty or of shape (num_faces, 3)."
+        raise ValueError(message)
+
+    return _generate(verts, faces, decimal_places)
+
+
+# TODO (nikhilar) Speed up this function.
+def _generate(verts, faces, decimal_places: Optional[int] = None) -> None:
+    assert not len(verts) or (verts.dim() == 2 and verts.size(1) == 3)
+    assert not len(faces) or (faces.dim() == 2 and faces.size(1) == 3)
+
+    if not (len(verts) or len(faces)):
+        warnings.warn("Empty 'verts' and 'faces' arguments provided")
+        return
+
+    verts, faces = verts.cpu(), faces.cpu()
+
+    lines = ""
+
+    if len(verts):
+        if decimal_places is None:
+            float_str = "%f"
+        else:
+            float_str = "%" + ".%df" % decimal_places
+
+        V, D = verts.shape
+        for i in range(V):
+            vert = [float_str % verts[i, j] for j in range(D)]
+            lines += "v %s\n" % " ".join(vert)
+
+    if torch.any(faces >= verts.shape[0]) or torch.any(faces < 0):
+        warnings.warn("Faces have invalid indices")
+
+    if len(faces):
+        F, P = faces.shape
+        for i in range(F):
+            face = ["%d" % (faces[i, j] + 1) for j in range(P)]
+            if i + 1 < F:
+                lines += "f %s\n" % " ".join(face)
+            elif i + 1 == F:
+                # No newline at the end of the file.
+                lines += "f %s" % " ".join(face)
+
+    return lines
